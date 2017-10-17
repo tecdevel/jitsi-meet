@@ -2169,6 +2169,8 @@ export default {
         APP.UI.addListener(
             UIEvents.VIDEO_DEVICE_CHANGED,
             cameraDeviceId => {
+                const videoWasMuted = this.isLocalVideoMuted();
+
                 sendEvent('settings.changeDevice.video');
                 createLocalTracksF({
                     devices: [ 'video' ],
@@ -2183,11 +2185,20 @@ export default {
 
                     return stream;
                 })
-                .then(stream => {
-                    this.useVideoStream(stream);
+                .then(stream => this.useVideoStream(stream))
+                .then(() => {
                     logger.log('switched local video device');
-                    APP.settings.setCameraDeviceId(cameraDeviceId, true);
+
+                    // If video was muted before changing current device
+                    // and selected new one, then mute new video track.
+                    if (!this.isSharingScreen
+                        && videoWasMuted) {
+                        sendEvent('changeDevice.video.muted');
+                        muteLocalVideo(true);
+                    }
                 })
+                .then(() =>
+                    APP.settings.setCameraDeviceId(cameraDeviceId, true))
                 .catch(err => {
                     APP.UI.showCameraErrorNotification(err);
                 });
@@ -2197,6 +2208,8 @@ export default {
         APP.UI.addListener(
             UIEvents.AUDIO_DEVICE_CHANGED,
             micDeviceId => {
+                const audioWasMuted = this.isLocalAudioMuted();
+
                 sendEvent(
                     'settings.changeDevice.audioIn');
                 createLocalTracksF({
@@ -2204,11 +2217,18 @@ export default {
                     cameraDeviceId: null,
                     micDeviceId
                 })
-                .then(([ stream ]) => {
-                    this.useAudioStream(stream);
+                .then(([ stream ]) => this.useAudioStream(stream))
+                .then(() => {
                     logger.log('switched local audio device');
-                    APP.settings.setMicDeviceId(micDeviceId, true);
+
+                    // If audio was muted before changing current device
+                    // and selected new one, then mute new audio track.
+                    if (audioWasMuted) {
+                        sendEvent('changeDevice.audioIn.muted');
+                        muteLocalAudio(true);
+                    }
                 })
+                .then(() => APP.settings.setMicDeviceId(micDeviceId, true))
                 .catch(err => {
                     APP.UI.showMicErrorNotification(err);
                 });
